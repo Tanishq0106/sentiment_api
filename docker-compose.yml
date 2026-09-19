@@ -1,0 +1,28 @@
+version: "3.9"
+
+services:
+  sentiment-api:
+    build:
+      context   : .
+      dockerfile: Dockerfile
+
+    container_name: sentiment_api
+
+    ports:
+      - "8000:8000"
+
+    environment:
+      - PYTHONUNBUFFERED=1
+      - ENV=production
+
+    volumes:
+      - ./artifacts:/app/artifacts:ro
+
+    restart: unless-stopped
+
+    healthcheck:
+      test    : ["CMD", "python", "-c",
+                 "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout : 10s
+      retries : 3

@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Sentiment Analyser · SVM</title>
+  <style>
+    :root {
+      --bg        : #0f1117;
+      --surface   : #1a1d27;
+      --surface2  : #22263a;
+      --border    : #2e3250;
+      --accent    : #6c63ff;
+      --positive  : #22c55e;
+      --negative  : #ef4444;
+      --neutral   : #94a3b8;
+      --text      : #e2e8f0;
+      --text-muted: #64748b;
+      --radius    : 12px;
+      --font      : 'Inter', system-ui, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family : var(--font);
+      background  : var(--bg);
+      color       : var(--text);
+      min-height  : 100vh;
+      padding     : 2rem 1rem;
+    }
+
+    /* ── Layout ── */
+    .container { max-width: 860px; margin: 0 auto; }
+
+    header {
+      text-align    : center;
+      margin-bottom : 2.5rem;
+    }
+    header h1 {
+      font-size   : 2rem;
+      font-weight : 700;
+      background  : linear-gradient(135deg, #6c63ff, #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.4rem;
+    }
+    header p { color: var(--text-muted); font-size: 0.9rem; }
+
+    /* ── Cards ── */
+    .card {
+      background    : var(--surface);
+      border        : 1px solid var(--border);
+      border-radius : var(--radius);
+      padding       : 1.5rem;
+      margin-bottom : 1.25rem;
+    }
+    .card-title {
+      font-size     : 0.75rem;
+      font-weight   : 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color         : var(--text-muted);
+      margin-bottom : 1rem;
+    }
+
+    /* ── Tabs ── */
+    .tabs {
+      display       : flex;
+      gap           : 0.5rem;
+      margin-bottom : 1.25rem;
+    }
+    .tab {
+      padding       : 0.5rem 1.25rem;
+      border-radius : 8px;
+      border        : 1px solid var(--border);
+      background    : transparent;
+      color         : var(--text-muted);
+      cursor        : pointer;
+      font-size     : 0.85rem;
+      font-weight   : 500;
+      transition    : all 0.2s;
+    }
+    .tab.active, .tab:hover {
+      background : var(--accent);
+      color      : #fff;
+      border-color: var(--accent);
+    }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── Textarea ── */
+    textarea {
+      width         : 100%;
+      min-height    : 140px;
+      background    : var(--surface2);
+      border        : 1px solid var(--border);
+      border-radius : 8px;
+      color         : var(--text);
+      font-family   : var(--font);
+      font-size     : 0.95rem;
+      padding       : 0.9rem 1rem;
+      resize        : vertical;
+      outline       : none;
+      transition    : border-color 0.2s;
+      line-height   : 1.6;
+    }
+    textarea:focus { border-color: var(--accent); }
+
+    .char-count {
+      text-align : right;
+      font-size  : 0.75rem;
+      color      : var(--text-muted);
+      margin-top : 0.4rem;
+    }
+
+    /* ── Buttons ── */
+    .btn {
+      display      : inline-flex;
+      align-items  : center;
+      gap          : 0.5rem;
+      padding      : 0.65rem 1.5rem;
+      border-radius: 8px;
+      border       : none;
+      font-size    : 0.9rem;
+      font-weight  : 600;
+      cursor       : pointer;
+      transition   : all 0.2s;
+    }
+    .btn-primary {
+      background : var(--accent);
+      color      : #fff;
+      width      : 100%;
+      justify-content: center;
+      margin-top : 0.75rem;
+    }
+    .btn-primary:hover { background: #5a52d5; transform: translateY(-1px); }
+    .btn-primary:disabled {
+      opacity   : 0.5;
+      cursor    : not-allowed;
+      transform : none;
+    }
+    .btn-secondary {
+      background : var(--surface2);
+      color      : var(--text);
+      border     : 1px solid var(--border);
+      font-size  : 0.8rem;
+      padding    : 0.4rem 0.9rem;
+    }
+
+    /* ── Spinner ── */
+    .spinner {
+      width        : 16px;
+      height       : 16px;
+      border       : 2px solid rgba(255,255,255,0.3);
+      border-top   : 2px solid #fff;
+      border-radius: 50%;
+      animation    : spin 0.7s linear infinite;
+      display      : none;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Result card ── */
+    #result-card { display: none; }
+
+    .result-header {
+      display        : flex;
+      align-items    : center;
+      justify-content: space-between;
+      margin-bottom  : 1rem;
+    }
+    .sentiment-badge {
+      display      : inline-flex;
+      align-items  : center;
+      gap          : 0.4rem;
+      padding      : 0.4rem 1rem;
+      border-radius: 20px;
+      font-size    : 1rem;
+      font-weight  : 700;
+    }
+    .badge-positive {
+      background : rgba(34, 197, 94, 0.15);
+      color      : var(--positive);
+      border     : 1px solid rgba(34, 197, 94, 0.3);
+    }
+    .badge-negative {
+      background : rgba(239, 68, 68, 0.15);
+      color      : var(--negative);
+      border     : 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .confidence-label {
+      font-size  : 0.8rem;
+      color      : var(--text-muted);
+      margin-bottom: 0.4rem;
+    }
+    .confidence-track {
+      background   : var(--surface2);
+      border-radius: 99px;
+      height       : 8px;
+      overflow     : hidden;
+      margin-bottom: 0.4rem;
+    }
+    .confidence-bar {
+      height          : 100%;
+      border-radius   : 99px;
+      width           : 0%;
+      transition      : width 0.7s cubic-bezier(0.4,0,0.2,1);
+    }
+    .bar-positive { background: linear-gradient(90deg, #16a34a, #22c55e); }
+    .bar-negative { background: linear-gradient(90deg, #b91c1c, #ef4444); }
+
+    .meta-row {
+      display  : flex;
+      gap      : 1.5rem;
+      margin-top: 1rem;
+      flex-wrap: wrap;
+    }
+    .meta-item { font-size: 0.8rem; color: var(--text-muted); }
+    .meta-item span { color: var(--text); font-weight: 600; }
+
+    /* ── Batch section ── */
+    #batch-results { margin-top: 1rem; }
+    .batch-item {
+      display        : flex;
+      align-items    : center;
+      justify-content: space-between;
+      padding        : 0.65rem 0.9rem;
+      background     : var(--surface2);
+      border-radius  : 8px;
+      margin-bottom  : 0.5rem;
+      gap            : 1rem;
+      border         : 1px solid var(--border);
+    }
+    .batch-text {
+      flex       : 1;
+      font-size  : 0.85rem;
+      color      : var(--text-muted);
+      white-space: nowrap;
+      overflow   : hidden;
+      text-overflow: ellipsis;
+    }
+    .mini-badge {
+      padding      : 0.2rem 0.65rem;
+      border-radius: 99px;
+      font-size    : 0.75rem;
+      font-weight  : 600;
+      white-space  : nowrap;
+    }
+    .mini-pos {
+      background: rgba(34,197,94,0.15);
+      color     : var(--positive);
+    }
+    .mini-neg {
+      background: rgba(239,68,68,0.15);
+      color     : var(--negative);
+    }
+    .batch-summary {
+      display        : flex;
+      gap            : 1rem;
+      margin-bottom  : 0.75rem;
+      font-size      : 0.85rem;
+    }
+    .batch-summary strong { color: var(--text); }
+
+    /* ── Metrics grid ── */
+    .metrics-grid {
+      display              : grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap                  : 1rem;
+      margin-bottom        : 1.25rem;
+    }
+    .metric-box {
+      background   : var(--surface2);
+      border       : 1px solid var(--border);
+      border-radius: 8px;
+      padding      : 1rem;
+      text-align   : center;
+    }
+    .metric-value {
+      font-size  : 1.6rem;
+      font-weight: 700;
+      color      : var(--accent);
+    }
+    .metric-label {
+      font-size : 0.72rem;
+      color     : var(--text-muted);
+      margin-top: 0.25rem;
+    }
+
+    /* ── History ── */
+    .history-item {
+      display        : flex;
+      align-items    : center;
+      justify-content: space-between;
+      padding        : 0.5rem 0;
+      border-bottom  : 1px solid var(--border);
+      font-size      : 0.82rem;
+      gap            : 0.75rem;
+    }
+    .history-item:last-child { border-bottom: none; }
+    .history-time { color: var(--text-muted); font-size: 0.75rem; min-width: 56px; }
+    .history-conf { color: var(--text-muted); min-width: 56px; text-align: right; }
+
+    /* ── Error ── */
+    .error-box {
+      background   : rgba(239,68,68,0.1);
+      border       : 1px solid rgba(239,68,68,0.3);
+      border-radius: 8px;
+      padding      : 0.75rem 1rem;
+      color        : #fca5a5;
+      font-size    : 0.85rem;
+      display      : none;
+      margin-top   : 0.75rem;
+    }
+
+    /* ── Model info ── */
+    .info-grid {
+      display              : grid;
+      grid-template-columns: 1fr 1fr;
+      gap                  : 0.6rem;
+    }
+    .info-row {
+      font-size: 0.82rem;
+      color    : var(--text-muted);
+      padding  : 0.5rem 0.75rem;
+      background: var(--surface2);
+      border-radius: 6px;
+    }
+    .info-row strong { color: var(--text); display: block; font-size: 0.88rem; }
+
+    .footer {
+      text-align : center;
+      margin-top : 2rem;
+      font-size  : 0.78rem;
+      color      : var(--text-muted);
+    }
+    .footer a { color: var(--accent); text-decoration: none; }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <header>
+    <h1>🎬 Sentiment Analyser</h1>
+    <p>SVM model trained on 50,000 IMDB reviews · Linear kernel · TF-IDF features</p>
+  </header>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('single')">Single Review</button>
+    <button class="tab"        onclick="switchTab('batch')">Batch Upload</button>
+    <button class="tab"        onclick="switchTab('metrics')">Live Metrics</button>
+    <button class="tab"        onclick="switchTab('info')">Model Info</button>
+  </div>
+
+  <!-- ── Tab 1: Single review ── -->
+  <div id="tab-single" class="tab-panel active">
+    <div class="card">
+      <div class="card-title">Enter a movie review</div>
+      <textarea
+        id="review-input"
+        placeholder="e.g. This film was an absolute masterpiece. The direction was stunning and the performances were unforgettable..."
+        oninput="updateCharCount()"
+        maxlength="10000"
+      ></textarea>
+      <div class="char-count"><span id="char-count">0</span> / 10,000</div>
+
+      <button class="btn btn-primary" id="predict-btn" onclick="predictSingle()">
+        <div class="spinner" id="spinner"></div>
+        <span id="btn-text">Analyse Sentiment</span>
+      </button>
+      <div class="error-box" id="error-box"></div>
+    </div>
+
+    <!-- Result -->
+    <div class="card" id="result-card">
+      <div class="result-header">
+        <div class="card-title" style="margin:0">Result</div>
+        <span id="sentiment-badge" class="sentiment-badge"></span>
+      </div>
+
+      <div class="confidence-label">Confidence</div>
+      <div class="confidence-track">
+        <div class="confidence-bar" id="conf-bar"></div>
+      </div>
+      <div style="text-align:right;font-size:0.82rem;color:var(--text-muted)">
+        <span id="conf-pct"></span>
+      </div>
+
+      <div class="meta-row">
+        <div class="meta-item">Latency <span id="meta-latency"></span></div>
+        <div class="meta-item">Raw tokens <span id="meta-raw"></span></div>
+        <div class="meta-item">Clean tokens <span id="meta-clean"></span></div>
+      </div>
+    </div>
+
+    <!-- Quick examples -->
+    <div class="card">
+      <div class="card-title">Try an example</div>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+        <button class="btn btn-secondary" onclick="loadExample('positive')">✅ Positive review</button>
+        <button class="btn btn-secondary" onclick="loadExample('negative')">❌ Negative review</button>
+        <button class="btn btn-secondary" onclick="loadExample('mixed')">🤔 Ambiguous review</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Tab 2: Batch ── -->
+  <div id="tab-batch" class="tab-panel">
+    <div class="card">
+      <div class="card-title">Batch review analysis (max 50)</div>
+      <textarea
+        id="batch-input"
+        placeholder="Paste one review per line. Each line will be analysed independently."
+        style="min-height:200px"
+      ></textarea>
+      <button class="btn btn-primary" onclick="predictBatch()">
+        Analyse All Reviews
+      </button>
+    </div>
+
+    <div id="batch-results"></div>
+  </div>
+
+  <!-- ── Tab 3: Metrics ── -->
+  <div id="tab-metrics" class="tab-panel">
+    <div class="card">
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+        Live API Metrics
+        <button class="btn btn-secondary" onclick="loadMetrics()">↻ Refresh</button>
+      </div>
+      <div class="metrics-grid" id="metrics-grid">
+        <div class="metric-box"><div class="metric-value" id="m-total">—</div><div class="metric-label">Total Requests</div></div>
+        <div class="metric-box"><div class="metric-value" id="m-pos">—</div><div class="metric-label">Positive</div></div>
+        <div class="metric-box"><div class="metric-value" id="m-neg">—</div><div class="metric-label">Negative</div></div>
+        <div class="metric-box"><div class="metric-value" id="m-latency">—</div><div class="metric-label">Avg Latency (ms)</div></div>
+        <div class="metric-box"><div class="metric-value" id="m-posrate">—</div><div class="metric-label">Positive Rate</div></div>
+      </div>
+
+      <div class="card-title">Recent requests</div>
+      <div id="history-list"></div>
+    </div>
+  </div>
+
+  <!-- ── Tab 4: Model info ── -->
+  <div id="tab-info" class="tab-panel">
+    <div class="card">
+      <div class="card-title">Model Details</div>
+      <div class="info-grid">
+        <div class="info-row"><strong>Algorithm</strong>Support Vector Machine</div>
+        <div class="info-row"><strong>Kernel</strong>Linear</div>
+        <div class="info-row"><strong>Regularisation C</strong>1.0 (tuned)</div>
+        <div class="info-row"><strong>Features</strong>TF-IDF, 50K vocab</div>
+        <div class="info-row"><strong>N-grams</strong>Unigrams + bigrams</div>
+        <div class="info-row"><strong>Training set</strong>40,000 reviews</div>
+        <div class="info-row"><strong>Test set</strong>10,000 reviews</div>
+        <div class="info-row"><strong>F1-Score</strong>0.9063</div>
+        <div class="info-row"><strong>Dataset</strong>Stanford IMDB</div>
+        <div class="info-row"><strong>Framework</strong>scikit-learn 1.4</div>
+        <div class="info-row"><strong>API</strong>FastAPI + uvicorn</div>
+        <div class="info-row"><strong>Deployment</strong>Docker + Render</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">API Endpoints</div>
+      <div class="info-grid">
+        <div class="info-row"><strong>POST /predict</strong>Single review classification</div>
+        <div class="info-row"><strong>POST /batch</strong>Up to 50 reviews at once</div>
+        <div class="info-row"><strong>GET /health</strong>Service health check</div>
+        <div class="info-row"><strong>GET /metrics</strong>Live usage statistics</div>
+        <div class="info-row"><strong>GET /docs</strong>Swagger interactive docs</div>
+        <div class="info-row"><strong>GET /redoc</strong>ReDoc documentation</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Built by Jodhani &nbsp;·&nbsp;
+    <a href="/docs" target="_blank">API Docs</a> &nbsp;·&nbsp;
+    <a href="/health" target="_blank">Health</a> &nbsp;·&nbsp;
+    <a href="/metrics" target="_blank">Metrics</a>
+  </div>
+
+</div>
+
+<script>
+  const API = '';   // empty = same origin; change to full URL if hosting separately
+
+  const EXAMPLES = {
+    positive: "This film was an absolute masterpiece. The cinematography was breathtaking, the performances were deeply moving, and the story kept me gripped from start to finish. One of the finest movies I have ever seen.",
+    negative: "A complete waste of two hours. The plot made absolutely no sense, the acting was wooden and unconvincing, and the special effects looked cheap. I cannot believe this got such high ratings.",
+    mixed   : "There were some genuinely interesting moments and the lead actor gave a decent performance, but overall the pacing was slow and the ending felt rushed and unsatisfying. Not terrible, but not great either."
+  };
+
+  // ── Tab switching ─────────────────────────────────────────
+  function switchTab(name) {
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    event.target.classList.add('active');
+    if (name === 'metrics') loadMetrics();
+  }
+
+  // ── Character counter ─────────────────────────────────────
+  function updateCharCount() {
+    const len = document.getElementById('review-input').value.length;
+    document.getElementById('char-count').textContent = len;
+  }
+
+  // ── Load example ──────────────────────────────────────────
+  function loadExample(type) {
+    document.getElementById('review-input').value = EXAMPLES[type];
+    updateCharCount();
+    document.getElementById('result-card').style.display = 'none';
+  }
+
+  // ── Single prediction ─────────────────────────────────────
+  async function predictSingle() {
+    const review = document.getElementById('review-input').value.trim();
+    if (!review) {
+      showError('Please enter a review first.');
+      return;
+    }
+    if (review.length < 10) {
+      showError('Review is too short — enter at least 10 characters.');
+      return;
+    }
+
+    setLoading(true);
+    hideError();
+
+    try {
+      const res = await fetch(API + '/predict', {
+        method  : 'POST',
+        headers : { 'Content-Type': 'application/json' },
+        body    : JSON.stringify({ review, include_cleaned: false })
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'API error');
+      }
+
+      const data = await res.json();
+      showResult(data);
+
+    } catch (e) {
+      showError('Request failed: ' + e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ── Show result ───────────────────────────────────────────
+  function showResult(data) {
+    const isPos    = data.label === 'positive';
+    const badge    = document.getElementById('sentiment-badge');
+    const bar      = document.getElementById('conf-bar');
+    const card     = document.getElementById('result-card');
+
+    badge.textContent  = isPos ? '✅ Positive' : '❌ Negative';
+    badge.className    = 'sentiment-badge ' + (isPos ? 'badge-positive' : 'badge-negative');
+
+    bar.className      = 'confidence-bar ' + (isPos ? 'bar-positive' : 'bar-negative');
+    bar.style.width    = '0%';
+    card.style.display = 'block';
+
+    // Animate bar after a tiny delay so CSS transition fires
+    setTimeout(() => {
+      bar.style.width = (data.confidence * 100).toFixed(1) + '%';
+    }, 50);
+
+    document.getElementById('conf-pct').textContent     = data.confidence_pct;
+    document.getElementById('meta-latency').textContent = data.latency_ms + 'ms';
+    document.getElementById('meta-raw').textContent     = data.raw_length;
+    document.getElementById('meta-clean').textContent   = data.clean_length;
+  }
+
+  // ── Batch prediction ──────────────────────────────────────
+  async function predictBatch() {
+    const raw = document.getElementById('batch-input').value.trim();
+    if (!raw) { alert('Please enter at least one review.'); return; }
+
+    const reviews = raw.split('\n').map(r => r.trim()).filter(r => r.length >= 5);
+    if (reviews.length === 0) { alert('No valid reviews found.'); return; }
+    if (reviews.length > 50)  { alert('Maximum 50 reviews per batch.'); return; }
+
+    try {
+      const res = await fetch(API + '/batch', {
+        method  : 'POST',
+        headers : { 'Content-Type': 'application/json' },
+        body    : JSON.stringify({ reviews })
+      });
+      const data = await res.json();
+      renderBatch(reviews, data);
+    } catch(e) {
+      alert('Batch request failed: ' + e.message);
+    }
+  }
+
+  function renderBatch(reviews, data) {
+    const container = document.getElementById('batch-results');
+
+    let html = `<div class="card">
+      <div class="card-title">Batch Results</div>
+      <div class="batch-summary">
+        <span>Total: <strong>${data.total}</strong></span>
+        <span style="color:var(--positive)">Positive: <strong>${data.positive_count}</strong></span>
+        <span style="color:var(--negative)">Negative: <strong>${data.negative_count}</strong></span>
+        <span style="color:var(--text-muted)">Latency: <strong>${data.latency_ms}ms</strong></span>
+      </div>`;
+
+    data.results.forEach((r, i) => {
+      const isPos = r.label === 'positive';
+      const preview = reviews[i].substring(0, 80) + (reviews[i].length > 80 ? '…' : '');
+      html += `
+        <div class="batch-item">
+          <span class="batch-text" title="${reviews[i]}">${preview}</span>
+          <span class="mini-badge ${isPos ? 'mini-pos' : 'mini-neg'}">
+            ${isPos ? '✅' : '❌'} ${(r.confidence * 100).toFixed(0)}%
+          </span>
+        </div>`;
+    });
+
+    html += '</div>';
+    container.innerHTML = html;
+  }
+
+  // ── Live metrics ──────────────────────────────────────────
+  async function loadMetrics() {
+    try {
+      const res  = await fetch(API + '/metrics');
+      const data = await res.json();
+
+      document.getElementById('m-total').textContent   = data.total_requests;
+      document.getElementById('m-pos').textContent     = data.positive_count;
+      document.getElementById('m-neg').textContent     = data.negative_count;
+      document.getElementById('m-latency').textContent = data.avg_latency_ms;
+      document.getElementById('m-posrate').textContent = data.positive_rate;
+
+      const log = data.recent_requests.reverse();
+      let html  = '';
+      if (log.length === 0) {
+        html = '<div style="color:var(--text-muted);font-size:0.82rem">No requests yet.</div>';
+      } else {
+        log.forEach(r => {
+          const isPos = r.label === 'positive';
+          const time  = new Date(r.timestamp).toLocaleTimeString();
+          html += `
+            <div class="history-item">
+              <span class="history-time">${time}</span>
+              <span class="mini-badge ${isPos ? 'mini-pos' : 'mini-neg'}">
+                ${isPos ? '✅' : '❌'} ${r.label}
+              </span>
+              <span class="history-conf">${(r.confidence * 100).toFixed(1)}%</span>
+              <span class="history-conf">${r.latency_ms}ms</span>
+            </div>`;
+        });
+      }
+      document.getElementById('history-list').innerHTML = html;
+
+    } catch(e) {
+      document.getElementById('history-list').innerHTML =
+        '<div style="color:var(--negative);font-size:0.82rem">Failed to load metrics.</div>';
+    }
+  }
+
+  // ── Helpers ───────────────────────────────────────────────
+  function setLoading(on) {
+    document.getElementById('predict-btn').disabled       = on;
+    document.getElementById('spinner').style.display      = on ? 'block' : 'none';
+    document.getElementById('btn-text').textContent       = on ? 'Analysing…' : 'Analyse Sentiment';
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('error-box');
+    el.textContent    = msg;
+    el.style.display  = 'block';
+  }
+
+  function hideError() {
+    document.getElementById('error-box').style.display = 'none';
+  }
+
+  // Auto-refresh metrics every 15 seconds when on that tab
+  setInterval(() => {
+    if (document.getElementById('tab-metrics').classList.contains('active')) {
+      loadMetrics();
+    }
+  }, 15000);
+</script>
+</body>
+</html>
