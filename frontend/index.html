@@ -540,32 +540,15 @@
       });
 
       if (!res.ok) {
-        const text = await res.text();
-        let errMsg = 'API error ' + res.status;
-        try {
-          const err = JSON.parse(text);
-          errMsg = err.detail || errMsg;
-        } catch(e) {
-          if (text) errMsg += ': ' + text;
-        }
-        throw new Error(errMsg);
+        const err = await res.json();
+        throw new Error(err.detail || 'API error');
       }
 
-      const textData = await res.text();
-      let data;
-      try {
-        data = JSON.parse(textData);
-      } catch(e) {
-        throw new Error('Invalid JSON response from server');
-      }
+      const data = await res.json();
       showResult(data);
 
     } catch (e) {
-      if (e.message.includes('JSON') || e.message.includes('Unexpected')) {
-        showError('The API is waking up from sleep (free tier). Wait 30 seconds and try again.');
-      } else {
-        showError('Request failed: ' + e.message);
-      }
+      showError('Request failed: ' + e.message);
     } finally {
       setLoading(false);
     }
@@ -611,23 +594,7 @@
         headers : { 'Content-Type': 'application/json' },
         body    : JSON.stringify({ reviews })
       });
-      const textData = await res.text();
-      if (!res.ok) {
-        let errMsg = 'API error ' + res.status;
-        try {
-          const err = JSON.parse(textData);
-          errMsg = err.detail || errMsg;
-        } catch(e) {
-          if (textData) errMsg += ': ' + textData;
-        }
-        throw new Error(errMsg);
-      }
-      let data;
-      try {
-        data = JSON.parse(textData);
-      } catch(e) {
-        throw new Error('Invalid JSON response from server');
-      }
+      const data = await res.json();
       renderBatch(reviews, data);
     } catch(e) {
       alert('Batch request failed: ' + e.message);
@@ -661,27 +628,12 @@
     html += '</div>';
     container.innerHTML = html;
   }
-  async function fetchWithRetry(url, options, retries = 2) {
-    for (let i = 0; i <= retries; i++) {
-      try {
-        const controller = new AbortController();
-        const timeout    = setTimeout(() => controller.abort(), 35000); // 35s timeout
-        const res        = await fetch(url, { ...options, signal: controller.signal });
-        clearTimeout(timeout);
-        return res;
-      } catch (e) {
-        if (i === retries) throw e;
-        await new Promise(r => setTimeout(r, 5000));
-      }
-    }
-  }
+
   // ── Live metrics ──────────────────────────────────────────
   async function loadMetrics() {
     try {
       const res  = await fetch(API + '/metrics');
-      const text = await res.text();
-      if (!res.ok) throw new Error('API error ' + res.status);
-      const data = JSON.parse(text);
+      const data = await res.json();
 
       document.getElementById('m-total').textContent   = data.total_requests;
       document.getElementById('m-pos').textContent     = data.positive_count;
@@ -739,20 +691,6 @@
       loadMetrics();
     }
   }, 15000);
-// Ping the health endpoint when page loads to wake up the server
-  async function wakeServer() {
-    try {
-      const res = await fetch(API + '/health');
-      if (res.ok) {
-        console.log('Server is awake');
-      }
-    } catch(e) {
-      console.log('Server is waking up...');
-      setTimeout(wakeServer, 20000);
-    }
-  }
-
-  wakeServer();
 </script>
 </body>
 </html>
