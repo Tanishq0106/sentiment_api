@@ -1,0 +1,80 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+
+  # ── Job 1: Run tests ────────────────────────────────────────
+  test:
+    name: Run test suite
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest httpx
+
+      - name: Download NLTK data
+        run: |
+          python -c "
+          import nltk
+          nltk.download('stopwords', quiet=True)
+          nltk.download('punkt', quiet=True)
+          nltk.download('punkt_tab', quiet=True)
+          nltk.download('wordnet', quiet=True)
+          "
+
+      - name: Run tests
+        run: pytest tests/ -v --tb=short
+
+  # ── Job 2: Build Docker image ───────────────────────────────
+  build:
+    name: Build Docker image
+    runs-on: ubuntu-latest
+    needs: test          # only runs if tests pass
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t sentiment-api .
+
+      - name: Verify image starts correctly
+        run: |
+          docker run -d -p 8000:8000 --name test-container sentiment-api
+          sleep 15
+          curl -f http://localhost:8000/health
+          docker stop test-container
+
+  # ── Job 3: Deploy to Render ─────────────────────────────────
+  deploy:
+    name: Deploy to Render
+    runs-on: ubuntu-latest
+    needs: [test, build]   # only runs if both test and build pass
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Trigger Render deployment
+        run: |
+          curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}" \
+               -H "Content-Type: application/json"
