@@ -40,7 +40,7 @@ metrics = {
     "negative_count"    : 0,
     "total_latency_ms"  : 0.0,
     "request_log"       : [],       # last 20 requests
-    "startup_time"      : datetime.datetime.utcnow().isoformat()
+    "startup_time"      : datetime.datetime.now(datetime.UTC).isoformat()
 }
 
 # ── Pydantic schemas ──────────────────────────────────────────
@@ -121,7 +121,7 @@ async def health_check():
         "status"      : "healthy",
         "model"       : "SVM Linear (C=1.0)",
         "version"     : "1.0.0",
-        "timestamp"   : datetime.datetime.utcnow().isoformat(),
+        "timestamp"   : datetime.datetime.now(datetime.UTC).isoformat(),
         "uptime_since": metrics["startup_time"]
     }
 
@@ -151,7 +151,7 @@ async def predict(request: ReviewRequest):
 
     # Keep a rolling log of last 20 requests
     metrics["request_log"].append({
-        "timestamp" : datetime.datetime.utcnow().isoformat(),
+        "timestamp" : datetime.datetime.now(datetime.UTC).isoformat(),
         "label"     : result["label"],
         "confidence": result["confidence"],
         "latency_ms": latency_ms
