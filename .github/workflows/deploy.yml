@@ -57,11 +57,11 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build Docker image
-        run: docker build -t sentiment-api .
+        run: docker build -t sentiment_api .
 
       - name: Verify image starts correctly
         run: |
-          docker run -d -p 8000:8000 --name test-container sentiment-api
+          docker run -d -p 8000:8000 --name test-container sentiment_api
           sleep 15
           curl -f http://localhost:8000/health
           docker stop test-container
