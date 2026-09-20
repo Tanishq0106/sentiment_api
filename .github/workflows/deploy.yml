@@ -44,7 +44,9 @@ jobs:
           "
 
       - name: Run tests
-        run: pytest tests/ -v --tb=short
+        run: |
+          cd $GITHUB_WORKSPACE
+          python -m pytest tests/ -v --tb=short
 
   # ── Job 2: Build Docker image ───────────────────────────────
   build:
