@@ -32,7 +32,38 @@ jobs:
 
       - name: Install dependencies
         run: pip install -r requirements.txt pytest httpx
+      - name: Create dummy model for CI
+        run: |
+          python - << 'EOF'
+          import os, joblib, numpy as np
+          from sklearn.svm import LinearSVC
+          from sklearn.calibration import CalibratedClassifierCV
+          from sklearn.feature_extraction.text import TfidfVectorizer
 
+          texts  = [
+              "great movie loved it brilliant masterpiece",
+              "terrible awful boring waste hated it",
+              "wonderful amazing fantastic superb outstanding",
+              "horrible disgusting dreadful pathetic garbage",
+              "excellent perfect beautiful stunning incredible",
+              "dull tedious pointless confusing disappointing"
+          ]
+          labels = [1, 0, 1, 0, 1, 0]
+
+          vec = TfidfVectorizer()
+          X   = vec.fit_transform(texts)
+
+          base = LinearSVC(C=1.0, max_iter=1000, random_state=42)
+          base.fit(X, labels)
+
+          cal = CalibratedClassifierCV(base, cv='prefit')
+          cal.fit(X, labels)
+
+          os.makedirs('artifacts', exist_ok=True)
+          joblib.dump(cal, 'artifacts/svm_best_model.pkl')
+          joblib.dump(vec, 'artifacts/tfidf_vectorizer.pkl')
+          print("CI dummy model created successfully")
+          EOF
       - name: Download NLTK data
         run: |
           python -c "

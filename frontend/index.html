@@ -548,7 +548,11 @@
       showResult(data);
 
     } catch (e) {
-      showError('Request failed: ' + e.message);
+      if (e.message.includes('JSON') || e.message.includes('Unexpected')) {
+        showError('The API is waking up from sleep (free tier). Wait 30 seconds and try again.');
+      } else {
+        showError('Request failed: ' + e.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -628,7 +632,20 @@
     html += '</div>';
     container.innerHTML = html;
   }
-
+  async function fetchWithRetry(url, options, retries = 2) {
+    for (let i = 0; i <= retries; i++) {
+      try {
+        const controller = new AbortController();
+        const timeout    = setTimeout(() => controller.abort(), 35000); // 35s timeout
+        const res        = await fetch(url, { ...options, signal: controller.signal });
+        clearTimeout(timeout);
+        return res;
+      } catch (e) {
+        if (i === retries) throw e;
+        await new Promise(r => setTimeout(r, 5000));
+      }
+    }
+  }
   // ── Live metrics ──────────────────────────────────────────
   async function loadMetrics() {
     try {
@@ -691,6 +708,20 @@
       loadMetrics();
     }
   }, 15000);
+// Ping the health endpoint when page loads to wake up the server
+  async function wakeServer() {
+    try {
+      const res = await fetch(API + '/health');
+      if (res.ok) {
+        console.log('Server is awake');
+      }
+    } catch(e) {
+      console.log('Server is waking up...');
+      setTimeout(wakeServer, 20000);
+    }
+  }
+
+  wakeServer();
 </script>
 </body>
 </html>
