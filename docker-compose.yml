@@ -19,6 +19,8 @@ services:
       - ./artifacts:/app/artifacts:ro
 
     restart: unless-stopped
+    mem_limit: 450m
+    memswap_limit: 450m
 
     healthcheck:
       test    : ["CMD", "python", "-c",
